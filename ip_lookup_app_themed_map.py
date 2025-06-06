@@ -5,8 +5,8 @@ import requests
 import ipaddress
 from functools import partial
 
-# --- Key Change: Import WebEngine and Folium ---
 from PySide6.QtCore import Qt, Slot, Signal, QObject, QThread, QUrl
+from PySide6.QtGui import QIcon
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
@@ -15,11 +15,9 @@ from PySide6.QtWidgets import (
     QMessageBox, QStatusBar, QScrollArea,
     QSizePolicy, QFrame, QSplitter
 )
-import folium
 
 BOOKMARKS_FILE = "ip_bookmarks.json"
 
-# --- Stylesheets (Unchanged) ---
 LIGHT_STYLE = """
     QWidget {
         background-color: #f0f0f0; color: #333333; font-size: 10pt;
@@ -29,7 +27,7 @@ LIGHT_STYLE = """
         background-color: #ffffff; color: #333333; border: 1px solid #c0c0c0;
         border-radius: 4px; padding: 4px;
     }
-    QWebEngineView { padding: 0px; } /* No padding for the map view itself */
+    QWebEngineView { padding: 0px; }
     QTextEdit#ResultsDisplay { font-size: 10pt; }
     QPushButton {
         background-color: #e0e0e0; border: 1px solid #b0b0b0;
@@ -43,7 +41,6 @@ LIGHT_STYLE = """
     }
     QWidget#BookmarkEntry QLabel { background-color: transparent; border: none; }
     QWidget#BookmarkEntry QPushButton { padding: 4px 8px; font-size: 9pt; }
-    /* Scrollbar styles etc. can be added here as before */
 """
 DARK_STYLE = """
     QWidget {
@@ -54,7 +51,7 @@ DARK_STYLE = """
         background-color: #3c3c3c; color: #e0e0e0; border: 1px solid #505050;
         border-radius: 4px; padding: 4px;
     }
-    QWebEngineView { padding: 0px; } /* No padding for the map view itself */
+    QWebEngineView { padding: 0px; }
     QTextEdit#ResultsDisplay { font-size: 10pt; }
     QPushButton {
         background-color: #505050; color: #e0e0e0; border: 1px solid #606060;
@@ -68,10 +65,8 @@ DARK_STYLE = """
     }
     QWidget#BookmarkEntry QLabel { background-color: transparent; border: none; }
     QWidget#BookmarkEntry QPushButton { padding: 4px 8px; font-size: 9pt; }
-    /* Scrollbar styles etc. can be added here as before */
 """
 
-# --- IpInfoWorker (Unchanged) ---
 class IpInfoWorker(QObject):
     finished = Signal(object, object)
     progress = Signal(str)
@@ -101,7 +96,8 @@ class IPLookupWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("IP Address Lookup with Live Map")
-        self.setGeometry(100, 100, 950, 800) # Increased size a bit
+        self.setGeometry(100, 100, 950, 800)
+        self.setWindowIcon(QIcon("icon.png"))
 
         self.current_worker = None
         self.current_thread = None
@@ -114,7 +110,6 @@ class IPLookupWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # --- Input Area (Unchanged) ---
         input_area_widget = QWidget()
         input_layout = QHBoxLayout(input_area_widget)
         self.ip_label = QLabel("Enter IP Address:")
@@ -132,7 +127,6 @@ class IPLookupWindow(QMainWindow):
         input_layout.addWidget(self.theme_toggle_button)
         main_layout.addWidget(input_area_widget)
 
-        # --- Info and Map Area (Side-by-side) ---
         self.info_and_map_splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self.results_display = QTextEdit()
@@ -141,14 +135,12 @@ class IPLookupWindow(QMainWindow):
         self.results_display.setPlaceholderText("IP information will be displayed here.")
         self.info_and_map_splitter.addWidget(self.results_display)
 
-        # --- Key Change: Replace QLabel with QWebEngineView ---
         self.map_view = QWebEngineView()
         self.info_and_map_splitter.addWidget(self.map_view)
 
         self.info_and_map_splitter.setSizes([self.width() // 2, self.width() // 2])
         main_layout.addWidget(self.info_and_map_splitter, 1)
 
-        # --- Bookmarks Area (Layout Unchanged) ---
         separator = QFrame(); separator.setFrameShape(QFrame.Shape.HLine); separator.setFrameShadow(QFrame.Shadow.Sunken)
         main_layout.addWidget(separator)
         bookmarks_title_label = QLabel("Bookmarked IPs")
@@ -163,7 +155,6 @@ class IPLookupWindow(QMainWindow):
 
         self.status_bar = QStatusBar(); self.setStatusBar(self.status_bar); self.status_bar.showMessage("Ready")
 
-        # --- Connections (Unchanged) ---
         self.lookup_button.clicked.connect(self.on_lookup_clicked)
         self.ip_input.returnPressed.connect(self.on_lookup_clicked)
         self.bookmark_ip_button.clicked.connect(self.on_bookmark_current_ip_clicked)
@@ -172,7 +163,7 @@ class IPLookupWindow(QMainWindow):
         self.load_bookmarks()
         self.render_bookmarks_list()
         self.apply_theme()
-        self._update_map_display(None) # Show initial blank map
+        self._update_map_display(None)
 
     def apply_theme(self):
         style = DARK_STYLE if self.is_dark_mode else LIGHT_STYLE
@@ -190,45 +181,45 @@ class IPLookupWindow(QMainWindow):
         ip_text = self.ip_input.text().strip()
         if not self._validate_ip_format(ip_text): return
         self.results_display.clear()
-        self._update_map_display(None) # Reset map
+        self._update_map_display(None)
         self.current_ip_data = None
         self.bookmark_ip_button.setEnabled(False)
         self._start_worker(ip_text, context={'type': 'lookup'})
 
     @Slot(object, object)
     def handle_api_result(self, result, context):
-        # (Slight modification to call map update)
         self.lookup_button.setEnabled(True)
         context_type = context.get('type', 'unknown')
         original_ip_for_update = context.get('original_ip_for_update')
         
-        # ... (rest of the error handling and setup is identical) ...
-
         if isinstance(result, Exception):
-            # ... error handling ...
-            self._update_map_display(None) # Ensure map is cleared on error
+            self._update_map_display(None)
             return
             
         if isinstance(result, dict):
             if context_type == 'lookup':
                 self.current_ip_data = result
                 self._display_ip_info(result)
-                self._update_map_display(result.get('loc')) # <-- Key Change
+                self._update_map_display(result.get('loc'))
                 self.status_bar.showMessage(f"Fetched info for {result.get('ip', 'N/A')}.")
                 self.bookmark_ip_button.setEnabled(not any(b['ip'] == result.get('ip') for b in self.bookmarks))
 
             elif context_type == 'bookmark_update':
                 new_ip_data = result
-                # ... (logic for updating bookmark is identical) ...
+                target_index = -1
+                for idx, bm in enumerate(self.bookmarks):
+                    if bm['ip'] == original_ip_for_update:
+                        target_index = idx
+                        break
                 if target_index != -1:
-                    # ... (logic for updating bookmark is identical) ...
+                    self.bookmarks[target_index] = new_ip_data.copy()
+                    self.save_bookmarks()
+                    self.editing_bookmark_index = -1
                     self._display_ip_info(new_ip_data)
-                    self._update_map_display(new_ip_data.get('loc')) # <-- Key Change
-                # ...
+                    self._update_map_display(new_ip_data.get('loc'))
                 self.render_bookmarks_list()
 
     def _display_ip_info(self, data_dict):
-        # (Unchanged)
         if not data_dict or not isinstance(data_dict, dict):
             self.results_display.setHtml("<font color='orange'>No data to display.</font>")
             return
@@ -250,7 +241,6 @@ class IPLookupWindow(QMainWindow):
         self.results_display.setHtml(output_html)
         self.ip_input.setText(ip)
 
-    # --- Key Change: New method to generate and display the map ---
     def _update_map_display(self, location_coordinates_str):
         if location_coordinates_str and location_coordinates_str != 'N/A':
             try:
@@ -311,24 +301,14 @@ class IPLookupWindow(QMainWindow):
 
     @Slot()
     def on_show_bookmark_details_clicked(self, index):
-        # (Modified to call the new map update function)
         if 0 <= index < len(self.bookmarks):
             bookmark_data = self.bookmarks[index]
             self.current_ip_data = bookmark_data
             self._display_ip_info(bookmark_data)
-            self._update_map_display(bookmark_data.get('loc')) # <-- Key Change
+            self._update_map_display(bookmark_data.get('loc'))
             self.status_bar.showMessage(f"Displaying bookmarked IP: {bookmark_data.get('ip')}")
             self.bookmark_ip_button.setEnabled(False)
     
-    # --- The rest of the bookmark and utility methods are unchanged ---
-    # _start_worker, _validate_ip_format, _format_error_message
-    # load_bookmarks, save_bookmarks, on_bookmark_current_ip_clicked
-    # render_bookmarks_list, _create_bookmark_entry_widget, on_edit_bookmark_clicked
-    # on_delete_bookmark_clicked, on_save_edited_bookmark_clicked, on_cancel_edit_bookmark_clicked
-    # closeEvent
-    # (These methods can be copied directly from the previous version)
-
-    # --- For completeness, here are the unchanged methods ---
     def _start_worker(self, ip_address, context):
         self.lookup_button.setEnabled(False); self.bookmark_ip_button.setEnabled(False)
         self.status_bar.showMessage(f"Processing {ip_address}...")
